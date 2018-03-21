@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 """
 Assist user in selecting a set of cases and controls that meet certain user
 specified criteria for downstream analysis
@@ -15,7 +14,7 @@ from functools import partial
 
 def valid_numerical_argument(
     arg, arg_name, arg_type=int, min_value=0, max_value=sys.maxint,
-    left_op=lt, right_op=le):
+    left_op=le, right_op=le):
     """Confirm that the specified value is valid in the range
     (minimum_value, maximum_value] (by default)
     :param arg: the value to be tested
@@ -44,12 +43,33 @@ def valid_numerical_argument(
                 arg_name=arg_name, arg=arg, arg_type=arg_type.__name__))
 
 # generic query format
+#QUERY = """
+#        SELECT {selection}{count_clause} 
+#        FROM SampleT AS SAMP
+#        INNER JOIN dragen_sample_metadata AS META
+#        ON META.sample_name = SAMP.CHGVID AND
+#        SAMP.SeqType = META.sample_type
+#        INNER JOIN dragen_qc_metrics AS QC
+#        ON QC.pseudo_prepid = META.pseudo_prepid 
+#        INNER JOIN dragen_pipeline_step AS STEP
+#        ON STEP.pseudo_prepid = META.pseudo_prepid
+#        WHERE STEP.pipeline_step_id = 108 AND
+#        STEP.step_status = 'completed' AND
+#        SAMP.BroadPhenotype <> "" AND
+#        META.sample_type = "{sequencing_type}"
+#        {univ_condition}
+#        {seq_spec_condition}
+#        {avail_condition}
+#        {pheno_condition}
+#        GROUP BY {selection}
+#        """
 QUERY = """
         SELECT {selection}{count_clause} 
         FROM SampleT AS SAMP
+        INNER JOIN prepT AS PREP
+        ON SAMP.DBID = PREP.DBID 
         INNER JOIN dragen_sample_metadata AS META
-        ON META.sample_name = SAMP.CHGVID AND
-        SAMP.SeqType = META.sample_type
+        ON PREP.p_prepID = META.pseudo_prepid
         INNER JOIN dragen_qc_metrics AS QC
         ON QC.pseudo_prepid = META.pseudo_prepid 
         INNER JOIN dragen_pipeline_step AS STEP
@@ -64,21 +84,17 @@ QUERY = """
         {pheno_condition}
         GROUP BY {selection}
         """
-        #INNER JOIN seqdbClone AS CLN 
-        #ON CLN.CHGVID = QC.CHGVID AND
-        #CLN.SeqType = QC.SeqType AND
-        #CLN.pseudo_prepid = META.pseudo_prepid
-        #CLN.Platform <> "GAIIx" AND
 
 DEFAULT_PREF = ['Exome', 'Genome', 'Custom_Capture'] # default SeqType preference order
 
 COUNT_CLAUSE = ', COUNT(*) AS C' # if counts are needed in SQL query
 
 AVAIL_CONDITION = ' AND SAMP.AvaiContUsed = "yes"' # for controls only
+
 d = 'c2VxdWVuY2VEQg=='
-h = 'MTAuNzMuNTAuMzg='
-u = 'Y29ob3J0X3NlbGVjdGlvbg=='
-p = 'Y29ob3J0X3NlbGVjdGlvbg=='
+h = 'c2VxcHJvZC5pZ20uY3VtYy5jb2x1bWJpYS5lZHU='
+u = 'c2VxdWVuY2Vfdmlldw=='
+p = 'VmlldzEyMyE='
 
 def run_query(cur, selection, count, seq, univ, seq_spec, avail, pheno):
     """
@@ -488,7 +504,7 @@ def build_cohort(sample_file_name, sequencing_types, sequencing_preference,
                 outfile.write('\t'.join([x[0] for x in desc])+'\n')
                 # write all fields if the keys match
                 for row in rows:
-                    if ((row[4].lower(), row[38]) in checklist):
+                    if ((row[4].lower(), row[43]) in checklist):
                         # write to outfile after removing pesky newlines in Notes
                         outfile.write('\t'.join(
                             [str(x).replace('\r','').replace('\n','') for x in row])+'\n')
@@ -522,7 +538,7 @@ if __name__ == '__main__':
                                      arg_type=float),
                         help='Require all samples to have at least this fraction '
                         'of bases in the CCDS regions to have 10x coverage')
-    parser.add_argument('--dbsnp_overlap_snv', default=0.95,
+    parser.add_argument('--dbsnp_overlap_snv', default=0.9,
                         type=partial(valid_numerical_argument,
                                      arg_name='dbsnp_overlap_snv',
                                      min_value=0.0,
